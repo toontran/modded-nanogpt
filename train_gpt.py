@@ -1887,7 +1887,8 @@ model.mlp_bank.data = model.mlp_bank.data.bfloat16()
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
 
-model: nn.Module = torch.compile(model, dynamic=False, fullgraph=True)
+# model: nn.Module = torch.compile(model, dynamic=False, fullgraph=True)
+model = model # TODO: temporary debug/stability version
 training_manager = TrainingManager(model)
 
 
