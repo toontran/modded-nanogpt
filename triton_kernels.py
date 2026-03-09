@@ -518,8 +518,14 @@ def linear_relu_square(a, b, aux=None):
 
 class FusedLinearReLUSquareFunction(torch.autograd.Function):
     @staticmethod
+    @torch.compiler.disable()
     def forward(ctx, x, W1, W2):
-        pre, post = linear_relu_square(x.view((-1, x.shape[-1])), W1)
+        y = x.view(-1, x.shape[-1]).contiguous()
+        print("ptr_mod_16 =", y.data_ptr() % 16, flush=True)
+        print("shape =", y.shape, flush=True)
+        print("stride =", y.stride(), flush=True)
+        print("is_contiguous =", y.is_contiguous(), flush=True)
+        pre, post = linear_relu_square(y, W1)
         x3 = post @ W2
         ctx.save_for_backward(x, W1, W2, pre, post)
         return x3.view(x.shape)
