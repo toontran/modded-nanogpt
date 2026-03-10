@@ -36,6 +36,10 @@ from kernels import get_kernel
 from torch import Tensor, nn
 
 from triton_kernels import XXT, XTX, ba_plus_cAA, FusedLinearReLUSquareFunction, FusedSoftcappedCrossEntropy, transpose_add, transpose_copy
+
+# 1 GPU
+USE_SDPA_FALLBACK = True
+
 # Fused triton kernel: relu(x @ W1.T)^2 @ W2.T
 # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
 ReLUSqrdMLP = FusedLinearReLUSquareFunction.apply
@@ -1124,10 +1128,36 @@ class CausalSelfAttention(nn.Module):
             max_len = 2 * max_len
 
         # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng
-        y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
-                                                        max_seqlen_q=max_len, max_seqlen_k=max_len,
-                                                        causal=True, softmax_scale=yarn.attn_scale, window_size=(bm_size, 0))
-        y = y.view(B, T, self.num_heads, self.head_dim)
+        if USE_SDPA_FALLBACK:
+            # q, k, v currently have shape [B, T, H, D] with B == 1
+            qh = q.transpose(1, 2)  # [B, H, T, D]
+            kh = k.transpose(1, 2)  # [B, H, T, D]
+            vh = v.transpose(1, 2)  # [B, H, T, D]
+
+            mask = build_varlen_causal_window_mask(
+                seqlens,
+                total_len=qh.shape[-2],
+                left_window=int(bm_size),
+                device=qh.device,
+            )
+
+            # SDPA expects attn_mask broadcastable to [B, H, Tq, Tk]
+            mask = mask.view(1, 1, mask.shape[0], mask.shape[1])
+
+            y = F.scaled_dot_product_attention(
+                qh, kh, vh,
+                attn_mask=mask,
+                dropout_p=0.0,
+                is_causal=False,   # already encoded in the mask
+                scale=float(yarn.attn_scale),
+            )
+
+            y = y.transpose(1, 2).contiguous()  # back to [B, T, H, D]
+        else:
+            y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
+                                                            max_seqlen_q=max_len, max_seqlen_k=max_len,
+                                                            causal=True, softmax_scale=yarn.attn_scale, window_size=(bm_size, 0))
+            y = y.view(B, T, self.num_heads, self.head_dim)
         y = y * torch.sigmoid(F.linear(x[..., :12], attn_gate_w)).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = F.linear(y, sa_lambdas[1] * qkvo_w[self.dim * 3:].type_as(y))  # sa_lambdas[1] pre-multiplied to O @shenberg
