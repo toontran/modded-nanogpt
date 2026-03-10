@@ -1128,7 +1128,7 @@ class CausalSelfAttention(nn.Module):
             max_len = 2 * max_len
      
         if USE_SDPA_FALLBACK:
-            qh = q.transpose(1, 2)  # [B, H, T, D]
+            qh = q.transpose(1, 2)  # [B, H_or_Hhalf, T_or_2T, D]
             kh = k.transpose(1, 2)
             vh = v.transpose(1, 2)
 
@@ -1141,6 +1141,10 @@ class CausalSelfAttention(nn.Module):
             )
 
             y = y.transpose(1, 2).contiguous()
+
+            if self.paired:
+                # SDPA output is [B, 2T, H/2, D]; restore original layout [B, T, H, D]
+                y = y.view(B, T, self.num_heads, self.head_dim)
         else:
             # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng   
             y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
