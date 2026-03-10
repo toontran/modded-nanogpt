@@ -1126,9 +1126,28 @@ class CausalSelfAttention(nn.Module):
 
             seqlens = 2 * seqlens
             max_len = 2 * max_len
-
-        # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng
+     
         if USE_SDPA_FALLBACK:
+            def build_varlen_causal_window_mask(cu_seqlens: torch.Tensor, total_len: int, left_window: int, device):
+                """
+                Returns additive mask of shape [total_len, total_len]:
+                0 for allowed positions, -inf for blocked positions.
+                cu_seqlens: int tensor like [0, len1, len1+len2, ...]
+                """
+                mask = torch.full((total_len, total_len), float("-inf"), device=device, dtype=torch.float32)
+
+                cu = cu_seqlens.tolist()
+                for s, e in zip(cu[:-1], cu[1:]):
+                    seg_len = e - s
+                    rows = torch.arange(seg_len, device=device)
+                    cols = torch.arange(seg_len, device=device)
+
+                    # causal + left window
+                    allowed = (cols[None, :] <= rows[:, None]) & (cols[None, :] >= rows[:, None] - left_window)
+                    mask[s:e, s:e][allowed] = 0.0
+
+                return mask
+                
             # q, k, v currently have shape [B, T, H, D] with B == 1
             qh = q.transpose(1, 2)  # [B, H, T, D]
             kh = k.transpose(1, 2)  # [B, H, T, D]
@@ -1154,6 +1173,7 @@ class CausalSelfAttention(nn.Module):
 
             y = y.transpose(1, 2).contiguous()  # back to [B, T, H, D]
         else:
+            # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng   
             y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
                                                             max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                             causal=True, softmax_scale=yarn.attn_scale, window_size=(bm_size, 0))
