@@ -311,22 +311,38 @@ for step in range(train_steps + 1):
         # stop the clock
         dist.barrier()
         training_time += time.perf_counter() - t0
+
         model.eval()
         val_tokens = 10485760
         val_loader = distributed_data_generator("data/fineweb10B/fineweb_val_*.bin", val_tokens)
-        val_loss = 0
+
+        micro_bsz = 1
+        val_loss = torch.tensor(0.0, device="cuda")
+
         with torch.no_grad():
             inputs, targets = next(val_loader)
-            for i in range(len(inputs) // 64):
-                val_loss += model(inputs[64*i:64*i+64], targets[64*i:64*i+64])
+            assert len(inputs) % micro_bsz == 0, (len(inputs), micro_bsz)
+
+            for i in range(len(inputs) // micro_bsz):
+                start = micro_bsz * i
+                end = start + micro_bsz
+                val_loss += model(inputs[start:end], targets[start:end])
+
         dist.all_reduce(val_loss, op=dist.ReduceOp.SUM)
         val_loss /= val_tokens
-        print0(f"step:{step}/{train_steps} val_loss:{val_loss:.5f} train_time:{training_time:.3f}s"
-               + f" step_avg:{1000*training_time/max(step, 1):.2f}ms", console=True)
+
+        print0(
+            f"step:{step}/{train_steps} val_loss:{val_loss.item():.5f} train_time:{training_time:.3f}s"
+            + f" step_avg:{1000*training_time/max(step, 1):.2f}ms",
+            console=True,
+        )
+
         model.train()
+
         # start the clock again
         dist.barrier()
         t0 = time.perf_counter()
+
         if is_last_step:
             break
 
