@@ -316,7 +316,7 @@ for step in range(train_steps + 1):
         val_tokens = 10485760
         val_loader = distributed_data_generator("data/fineweb10B/fineweb_val_*.bin", val_tokens)
 
-        micro_bsz = 1
+        micro_bsz = 16
         val_loss = torch.tensor(0.0, device="cuda")
 
         with torch.no_grad():
