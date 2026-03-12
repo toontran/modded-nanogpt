@@ -249,7 +249,7 @@ class Muon(torch.optim.Optimizer):
 ########################################
 
 model = GPT(vocab_size=50257, num_layers=12, model_dim=768).cuda()
-model.compile(dynamic=False)
+# model.compile(dynamic=False)
 
 for name, param in model.named_parameters():
     w = param.data
