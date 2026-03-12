@@ -332,20 +332,34 @@ for step in range(train_steps + 1):
 
     # --------------- TRAINING SECTION -----------------
     inputs, targets = next(train_loader)
-    # accumulate across microbatches in case we are running with fewer than 8 gpus
-    for i in range(len(inputs) // 64):
-        model(inputs[64*i:64*i+64], targets[64*i:64*i+64]).backward()
+
+    # choose a smaller per-microstep batch to reduce peak memory,
+    # while keeping the same effective batch by accumulating over all chunks
+    micro_bsz = 16
+    assert len(inputs) % micro_bsz == 0, (len(inputs), micro_bsz)
+
+    for i in range(len(inputs) // micro_bsz):
+        start = micro_bsz * i
+        end = start + micro_bsz
+        model(inputs[start:end], targets[start:end]).backward()
+
     for name, param in model.named_parameters():
         assert param.grad is not None, name
         dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
+
     # set optimization hyperparameters and take a step
     for opt in optimizers:
         for group in opt.param_groups:
             group["lr"] = group["initial_lr"] * get_lr(step)
         opt.step()
+
     model.zero_grad(set_to_none=True)
+
     approx_training_time = training_time + (time.perf_counter() - t0)
-    print0(f"step:{step+1}/{train_steps} train_time:{approx_training_time:.3f}s"
-           + f" step_avg:{1000*approx_training_time/(step + 1):.2f}ms", console=True)
+    print0(
+        f"step:{step+1}/{train_steps} train_time:{approx_training_time:.3f}s"
+        + f" step_avg:{1000*approx_training_time/(step + 1):.2f}ms",
+        console=True,
+    )
 
 dist.destroy_process_group()
