@@ -351,7 +351,7 @@ for step in range(train_steps + 1):
 
     # choose a smaller per-microstep batch to reduce peak memory,
     # while keeping the same effective batch by accumulating over all chunks
-    micro_bsz = 16
+    micro_bsz = 8
     assert len(inputs) % micro_bsz == 0, (len(inputs), micro_bsz)
 
     for i in range(len(inputs) // micro_bsz):
