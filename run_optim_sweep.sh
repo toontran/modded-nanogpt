@@ -24,10 +24,11 @@ grid_run() {
     local opt="$1"
     shift
 
-    while read -r config; do
+    while IFS= read -r config; do
+        local name
         name="${opt}_$(echo "$config" | tr ' ' '_' | tr '=' '-')"
         run "$name" --hidden_opt "$opt" $config
-    done
+    done <<< "$1"
 }
 
 # --------------------------
