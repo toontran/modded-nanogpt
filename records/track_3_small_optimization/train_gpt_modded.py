@@ -68,6 +68,43 @@ parser.add_argument("--hidden_nesterov", type=str2bool, default=None)
 parser.add_argument("--hidden_opt_tag", type=str, default="")
 
 args = parser.parse_args()
+
+
+########################################
+#                Setup                 #
+########################################
+
+seed = args.seed
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+# torchrun sets these env variables
+device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
+torch.cuda.set_device(device)
+dist.init_process_group(backend="nccl", device_id=device)
+dist.barrier()
+# this code can be run equivalently with 1, 2, 4, or 8 gpus.
+assert 8 % dist.get_world_size() == 0
+
+# logging setup
+if dist.get_rank() == 0:
+    os.makedirs("logs", exist_ok=True)
+    logfile = f"logs/{uuid.uuid4()}.txt"
+    print(logfile)
+    
+def print0(s, console=False):
+    if dist.get_rank() == 0:
+        with open(logfile, "a") as f:
+            if console:
+                print(s)
+            print(s, file=f)
+
+# we begin by logging this file itself
+print0(code)
+print0("="*100)
+print0(f"Running PyTorch {torch.version.__version__} compiled for CUDA {torch.version.cuda}")
+print0("="*100)
+
 print0(
     "RUN_CONFIG "
     f"seed={args.seed} "
@@ -84,41 +121,6 @@ print0(
     f"hidden_nesterov={args.hidden_nesterov}",
     console=True,
 )
-
-########################################
-#                Setup                 #
-########################################
-
-seed = args.seed
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-print0(f"seed={seed}")
-
-# torchrun sets these env variables
-device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
-torch.cuda.set_device(device)
-dist.init_process_group(backend="nccl", device_id=device)
-dist.barrier()
-# this code can be run equivalently with 1, 2, 4, or 8 gpus.
-assert 8 % dist.get_world_size() == 0
-
-# logging setup
-if dist.get_rank() == 0:
-    os.makedirs("logs", exist_ok=True)
-    logfile = f"logs/{uuid.uuid4()}.txt"
-    print(logfile)
-def print0(s, console=False):
-    if dist.get_rank() == 0:
-        with open(logfile, "a") as f:
-            if console:
-                print(s)
-            print(s, file=f)
-
-# we begin by logging this file itself
-print0(code)
-print0("="*100)
-print0(f"Running PyTorch {torch.version.__version__} compiled for CUDA {torch.version.cuda}")
-print0("="*100)
 
 
 ########################################
