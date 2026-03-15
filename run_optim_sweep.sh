@@ -57,7 +57,7 @@ beta2 = [0.95, 0.99]
 eps = [1e-8, 1e-10]
 
 for l, w, b2, e in itertools.product(lr, wd, beta2, eps):
-    print(f"--hidden_lr {l} --hidden_weight_decay {w} --hidden_beta1 0.9 --hidden_beta2 {b2} --hidden_eps {e}")
+    print(f"--hidden_lr {l} --hidden_weight_decay {w} --hidden_beta1 0.9 --hidden_beta2 {b2} --hidden_eps {e} --hidden_warmup_tokens 250")
 PY
 }
 
