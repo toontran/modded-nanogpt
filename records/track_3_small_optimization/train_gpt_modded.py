@@ -431,6 +431,7 @@ def get_lr(step: int, cooldown_frac=0.7):
 
 train_loader = distributed_data_generator("data/fineweb10B/fineweb_train_*.bin", batch_size)
 training_time = 0
+val_count = 0
 # start the clock
 dist.barrier()
 t0 = time.perf_counter()
@@ -474,6 +475,9 @@ for step in range(train_steps + 1):
         dist.barrier()
         t0 = time.perf_counter()
 
+        val_count += 1
+        if val_count >= 2:
+            break
         if is_last_step:
             break
 
