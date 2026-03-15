@@ -14,13 +14,13 @@ run() {
     shift
 
     echo "=== $name ==="
-    echo "torchrun --standalone --nproc_per_node=\"$NGPU\" \"$TRAIN_SCRIPT\" --seed \"$SEED\" --train_steps \"$TRAIN_STEPS\" $* 2>&1 | tee \"$LOGDIR/$name.txt\""
+    # echo "torchrun --standalone --nproc_per_node=\"$NGPU\" \"$TRAIN_SCRIPT\" --seed \"$SEED\" --train_steps \"$TRAIN_STEPS\" $* 2>&1 | tee \"$LOGDIR/$name.txt\""
 
     # Uncomment to actually run:
-    # torchrun --standalone --nproc_per_node="$NGPU" "$TRAIN_SCRIPT" \
-    #     --seed "$SEED" \
-    #     --train_steps "$TRAIN_STEPS" \
-    #     "$@" 2>&1 | tee "$LOGDIR/$name.txt"
+    torchrun --standalone --nproc_per_node="$NGPU" "$TRAIN_SCRIPT" \
+        --seed "$SEED" \
+        --train_steps "$TRAIN_STEPS" \
+        "$@" 2>&1 | tee "$LOGDIR/$name.txt"
 }
 
 grid_run() {
