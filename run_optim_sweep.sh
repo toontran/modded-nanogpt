@@ -8,7 +8,7 @@ SEED="${SEED:-1234}"
 TRAIN_STEPS="${TRAIN_STEPS:-3800}"
 
 # Manually chosen constant: total number of machines sharing the sweep
-NUM_MACHINES="${NUM_MACHINES:-4}"
+NUM_MACHINES="${NUM_MACHINES:-20}"
 
 mkdir -p "$LOGDIR"
 
